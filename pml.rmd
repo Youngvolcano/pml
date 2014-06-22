@@ -1,0 +1,79 @@
+---
+title: "PML_project"
+author: "Weiguo Cai"
+date: "Saturday, June 21, 2014"
+output: html_document
+---
+
+
+PML prediction project
+============================
+Read data
+```{r, echo=TRUE}
+training <- read.csv('C:/Users/caiwe/Documents/continued_learning/Practical_machine_learning_Leek/Project/pml-training.csv')
+testing <- read.csv('C:/Users/caiwe/Documents/continued_learning/Practical_machine_learning_Leek/Project/pml-testing.csv')
+dim(training)
+dim(testing)
+```
+
+
+Feature selection, preprocessing, training, validation, and prediction 
+```{r, echo=TRUE}
+library(caret)
+
+##only keep the columns with 80% or more data
+col_names=colnames(training)
+keepvar_2=function(x,nrow=19622) {length(x[x!="" & is.na(x)==F])/nrow > 0.8}
+name_ind=apply(training,2,keepvar_2)
+col_names=col_names[which(name_ind)]
+training=training[,col_names]
+
+# discards unuseful predictors
+# they may be related to design of study
+# or names and sequence numbers
+removeIndex <- grep("timestamp|X|user_name|new_window|num_window",names(training))
+training <- training[,-removeIndex]
+
+#70% of the total training data set as training data
+#the rest of 30% as validation data
+trainIndex <- createDataPartition(y = training$classe, p=0.7,list=FALSE)
+trainData <- training[trainIndex,]
+validData <- training[-trainIndex,]
+
+#using random forest model for training
+modFit <- train(trainData$classe ~.,data = trainData,method="rf",trControl = trainControl(method = "cv", number = 4))
+modFit
+
+# out of sample prediction error 
+pred_valid=predict(modFit, newdata=validData)
+validData$predRight = pred_valid==validData$classe 
+1 - (sum(validData$predRight)/dim(validData)[1])
+
+# same preprocessing of testing data
+col_names=col_names[col_names!="classe"]
+testing=testing[,col_names]
+removeIndex <- grep("timestamp|X|user_name|new_window|num_window",names(testing))
+testing <- testing[,-removeIndex]
+
+##prediction for testing data 
+pred_test=predict(modFit, newdata=testing)
+pred_test
+```
+
+
+Creating 20 text files of prediction results for submission  
+```{r, echo=TRUE}
+str(pred_test)
+#result is a factor;change it to character
+pred_test=as.character(pred_test)
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("C:/Users/caiwe/Documents/continued_learning/Practical_machine_learning_Leek/Project/problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(pred_test)
+```
